@@ -261,7 +261,7 @@ jobs:
           bun scripts/provider-version.ts "$provider" "$version"
           if ($LASTEXITCODE -ne 0) { throw 'Provider was not built as this release version' }
           Copy-Item $provider, $badge -Destination "$stage/desktop/"
-          & scripts/installer/build-windows-notification-identity.ps1 -StageDir $stage -SdkBin '${{ steps.tools.outputs.sdkbin }}' -Version $version -Arch x64
+          & scripts/installer/build-windows-notification-identity.ps1 -StageDir $stage -SdkBin '${{ steps.tools.outputs.sdkbin }}' -Version $version -Arch x64 -SdkToolsPreverified
           if ($LASTEXITCODE -ne 0) { throw 'Identity embedding failed' }
 
       - name: Sign payloads with the per-run self-signed certificate

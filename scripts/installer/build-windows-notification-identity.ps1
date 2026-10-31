@@ -2,7 +2,12 @@ param(
   [Parameter(Mandatory=$true)][string]$StageDir,
   [Parameter(Mandatory=$true)][string]$SdkBin,
   [Parameter(Mandatory=$true)][string]$Version,
-  [Parameter(Mandatory=$true)][ValidateSet('x64','arm64')][string]$Arch
+  [Parameter(Mandatory=$true)][ValidateSet('x64','arm64')][string]$Arch,
+  # The caller hash-verified the SDK Build Tools package (toolchain lock). The
+  # per-tool Authenticode check below only makes sense for tools from an
+  # unverified source; NuGet-shipped mt.exe/makeappx.exe are not signed by
+  # "Microsoft Windows Kits Publisher".
+  [switch]$SdkToolsPreverified
 )
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
@@ -28,9 +33,11 @@ try {
   if($machine -ne $expected){throw 'Native provider architecture mismatch'}
 } finally {$reader.Dispose()}
 }
+if(-not $SdkToolsPreverified){
 foreach($tool in @('mt.exe','makeappx.exe')){
   $signature=Get-AuthenticodeSignature -LiteralPath (Join-Path $sdk $tool)
   if($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike 'CN=Microsoft Windows Kits Publisher,*'){throw ('Invalid SDK signing identity: '+$tool)}
+}
 }
 $name='Elboaf.Interceptor.Desktop'
 $publisher='CN=elboaf'
