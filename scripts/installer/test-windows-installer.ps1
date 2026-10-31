@@ -70,6 +70,10 @@ function Run-Setup([string]$Path, [string]$Log) {
   $exited = $process.WaitForExit(600000)
   Assert-True ($exited -and $process.HasExited) 'Setup did not finish within 10 minutes.'
   Assert-True ($process.ExitCode -eq 0) "Setup failed with exit code $($process.ExitCode). See $Log"
+  $logs = Join-Path $PSScriptRoot '..\..\dist\acceptance-logs'
+  New-Item -ItemType Directory -Force -Path $logs | Out-Null
+  $stamp = Get-Date -Format 'HHmmss-fff'
+  Copy-Item -LiteralPath $Log -Destination (Join-Path $logs "${stamp}-$([IO.Path]::GetFileName($Path))-.log") -ErrorAction SilentlyContinue
 }
 
 $existingProduct = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($productKey)

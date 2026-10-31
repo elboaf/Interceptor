@@ -307,7 +307,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: full-acceptance-logs-${{ steps.version.outputs.version }}
-          path: ${{ runner.temp }}/interceptor-*test.log
+          path: |
+            dist/acceptance-logs/**
+            dist/windows/x64/desktop/notifications/**
           if-no-files-found: warn
 
       - name: Upload fork code-signing certificate
