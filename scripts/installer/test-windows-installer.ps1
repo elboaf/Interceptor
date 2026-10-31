@@ -88,6 +88,15 @@ foreach ($hostKey in $hostKeys) {
 }
 $installed = $false
 
+# Fork Full lane: trust must exist BEFORE Setup runs - the installer registers the
+# self-signed sparse MSIX itself (Add-AppxPackage inside Setup), which fails on an
+# untrusted publisher and aborts the whole install transaction.
+if ($Full) {
+  Assert-True ($CerPath -and (Test-Path -LiteralPath $CerPath)) 'Full acceptance needs the fork code-signing .cer (-CerPath).'
+  $preTrust = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:CurrentUserTrustedPeople
+  Assert-True ($null -ne $preTrust) 'Could not import the fork code-signing certificate.'
+}
+
 try {
   if ($SignTool) {
     & $SignTool verify /pa /all /v /tw $Installer
@@ -185,7 +194,6 @@ try {
 # package needs its .cer in TrustedPeople before Add-AppxPackage accepts it. This
 # proves the fork identity round-trips on a real Windows install.
 if ($Full) {
-  Assert-True ($CerPath -and (Test-Path -LiteralPath $CerPath)) 'Full acceptance needs the fork code-signing .cer (-CerPath).'
   $familyName = 'Elboaf.Interceptor.Desktop_eqw9pvz3h4s3p'
   $desktop = Join-Path $installRoot 'interceptor-desktop.exe'
   $badge = Join-Path $installRoot 'interceptor-notification-badge.exe'
@@ -197,12 +205,10 @@ if ($Full) {
   # machine ('NotTrusted'); 'Valid' once the .cer is imported, 'HashMismatch'
   # only if the payload was tampered with.
   Assert-True ($sig.Status -in @('Valid', 'NotTrusted')) "Provider payload signature is not intact: $($sig.Status)"
-  $imported = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\TrustedPeople
-  Assert-True ($null -ne $imported) 'Could not import the fork code-signing certificate.'
-  $identity = & powershell -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '$msix' -ExternalLocation '$installRoot'; if (-not \$?) { exit 1 }"
-  Assert-True ($LASTEXITCODE -eq 0) 'Sparse package registration (Add-AppxPackage -ExternalLocation) failed.'
+  # Setup registered the sparse package itself (the .cer was trusted pre-install);
+  # verify the fork identity rather than re-registering.
   $registered = Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop'
-  Assert-True ($null -ne $registered) 'Fork package identity is not registered after Add-AppxPackage.'
+  Assert-True ($null -ne $registered) 'Fork package identity is not registered after the Full install.'
   Assert-True ($registered.Publisher -ceq 'CN=elboaf') 'Registered package publisher differs from the fork identity.'
   Assert-True ($registered.PackageFamilyName -ceq $familyName) 'Registered package family name differs from the fork identity.'
   $startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Interceptor Desktop {B7F4D8A1-3E22-4B91-A6E4-9C2D5F8A1234}.lnk'
@@ -213,7 +219,7 @@ if ($Full) {
   Assert-True ($LASTEXITCODE -eq 0) 'interceptor-desktop capabilities did not run cleanly.'
   # Leave the machine clean: unregister identity, drop trust anchor, uninstall the product.
   & powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop' | Remove-AppxPackage"
-  Remove-Item -LiteralPath ('Cert:\CurrentUser\TrustedPeople\' + $imported.Thumbprint) -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath ('Cert:\CurrentUser\TrustedPeople\' + $preTrust.Thumbprint) -ErrorAction SilentlyContinue
   $unins = Join-Path $installRoot 'unins000.exe'
   Assert-True (Test-Path -LiteralPath $unins) 'Full install produced no uninstaller.'
   $proc = Start-Process -FilePath $unins -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG=$uninstallLog") -Wait -PassThru
