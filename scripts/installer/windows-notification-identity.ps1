@@ -6,6 +6,12 @@ param(
 )
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
+# A powershell.exe child of PowerShell 7 (pwsh) inherits pwsh's PSModulePath,
+# which hides the Windows PowerShell module directories and breaks autoload of
+# Get-AuthenticodeSignature / Get-AppxPackage. Restore them before anything
+# autoloads; the fix also propagates to this script's child deployments.
+$fiveOneModules=Join-Path $PSHOME 'Modules'
+if(($env:PSModulePath -split ';') -notcontains $fiveOneModules){$env:PSModulePath="$env:PSModulePath;$fiveOneModules"}
 if((Get-Process -Id $PID).SessionId -eq 0){throw 'Notification identity maintenance requires the graphical login'}
 if(-not [IO.Path]::IsPathRooted($Root)){throw 'An absolute owned installation root is required'}
 $Root=[IO.Path]::GetFullPath($Root).TrimEnd('\')
