@@ -13,7 +13,16 @@ irm https://raw.githubusercontent.com/Hacker-Valley-Media/Interceptor/main/scrip
 To do it by hand:
 
 1. Download the architecture-matched `Interceptor-Browser-X.Y.Z-windows-x64.exe` or `Interceptor-Browser-X.Y.Z-windows-arm64.exe` from the matching GitHub release.
-2. Fork build (elboaf): the installer is **not Authenticode-signed**. Verify integrity by its SHA-256 instead (compare against the checksums in the release, or run `scripts/get-interceptor.ps1` from this repo, which checks the release's `SHA256SUMS-ALL` for you). SmartScreen may show an unknown-publisher warning on first run; that is expected for an unsigned build.
+2. Fork build (elboaf): the installer is **not Authenticode-signed**. Verify integrity by its SHA-256 instead (compare against the checksums in the release, or run `scripts/get-interceptor.ps1` from this repo, which checks the release's `SHA256SUMS` for you). SmartScreen may show an unknown-publisher warning on first run; that is expected for an unsigned build.
+
+   **Full installer, one extra step:** Windows refuses to *deploy* the Full package's sparse MSIX identity when it is unsigned — that is a hard refusal, not a warning. The release ships `fork-codesigning.cer` for exactly this. Import it once for your user (no admin needed), then run the installer:
+
+   ```powershell
+   Import-Certificate -FilePath .\fork-codesigning.cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+   .\Interceptor-Full-X.Y.Z-windows-x64.exe
+   ```
+
+   The certificate exists only so the MSIX deployment is permitted; it grants no trust to anything else, and you can delete it from `Cert:\CurrentUser\TrustedPeople` any time (toast/contacts identity stops resolving if you do while installed).
 3. Run Setup. New installs use `%LOCALAPPDATA%\Programs\Interceptor`; upgrades and repairs preserve the existing same-product directory.
 4. Install the Interceptor extension, either way. Both copies share one extension ID and work the same:
    - **Chrome Web Store** (Chrome, Brave, Edge): https://chromewebstore.google.com/detail/interceptor/gomcpnagjjlhehnkoobkjgnkbleiooed. Edge installs it after you allow extensions from other stores; a Microsoft Edge Add-ons listing is not published yet.
