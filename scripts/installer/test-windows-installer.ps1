@@ -61,7 +61,14 @@ function Write-RegistrySnapshot([string]$SubKey, [string]$Name, $Snapshot) {
 }
 
 function Run-Setup([string]$Path, [string]$Log) {
-  $process = Start-Process -FilePath $Path -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG=$Log") -Wait -PassThru
+  $process = Start-Process -FilePath $Path -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG=$Log") -PassThru
+  # Direct-handle wait only: Start-Process -Wait also waits for Setup's children,
+  # and the Full installer ends by starting interceptor-desktop.exe, which keeps
+  # running - a documented trap (see scripts/get-interceptor.ps1). Setup itself
+  # always exits; its spawned provider does not.
+  $null = $process.Handle
+  $exited = $process.WaitForExit(600000)
+  Assert-True ($exited -and $process.HasExited) 'Setup did not finish within 10 minutes.'
   Assert-True ($process.ExitCode -eq 0) "Setup failed with exit code $($process.ExitCode). See $Log"
 }
 
@@ -201,7 +208,8 @@ if ($Full) {
   $startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Interceptor Desktop {B7F4D8A1-3E22-4B91-A6E4-9C2D5F8A1234}.lnk'
   Assert-True (Test-Path -LiteralPath $startupLink) 'Full-install startup link was not created.'
   Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'skills\interceptor-desktop\SKILL.md')) 'Native-app skill was not installed.'
-  & $desktop capabilities 2>&1 | Out-Null
+  $capOut = & $desktop capabilities 2>&1
+  if ($LASTEXITCODE -ne 0) { Write-Host "capabilities output: $capOut" }
   Assert-True ($LASTEXITCODE -eq 0) 'interceptor-desktop capabilities did not run cleanly.'
   # Leave the machine clean: unregister identity, drop trust anchor, uninstall the product.
   & powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop' | Remove-AppxPackage"
