@@ -282,13 +282,16 @@ jobs:
             & $signtool sign /v /fd SHA256 /f $pfx /p $pw /tr $timestamp /td SHA256 $file
             if ($LASTEXITCODE -ne 0) { throw "Signing failed: $file" }
           }
-          Copy-Item (Join-Path $env:RUNNER_TEMP 'fork-codesigning.cer') 'dist/windows/x64/desktop/notifications/fork-codesigning.cer'
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'fork-signing.cer') 'dist/windows/x64/desktop/notifications/fork-codesigning.cer'
 
       - name: Compile Full x64 installer
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
-          & '${{ steps.tools.outputs.iscc }}' "/DAppVersion=$version" "/DArtifactArch=x64" "/DFullInstall=1" "/DSigningEnabled=0" scripts/installer/interceptor.iss
+          # No SigningEnabled define at all: Inno's ifdef tests defined-ness, not
+          # value, so any such define would route into upstream's sign-tool
+          # path. Without it Inno writes the uninstaller directly (unsigned).
+          & '${{ steps.tools.outputs.iscc }}' "/DAppVersion=$version" "/DArtifactArch=x64" "/DFullInstall=1" scripts/installer/interceptor.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno compile failed: Full x64' }
 
       - name: Install, verify, repair, and uninstall Full x64 package

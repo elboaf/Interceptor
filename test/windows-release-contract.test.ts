@@ -205,11 +205,10 @@ describe("Windows production release contract", () => {
     expect(workflow).toContain("windows-x64")
     expect(workflow).not.toContain("windows-arm64")
     // Unsigned browser lane: no Inno sign tool is wired and no signing define is
-    // passed for the Browser installer (the Full lane uses SigningEnabled=0, the
-    // explicit no-sign spelling).
+    // passed at all (Inno's #ifdef tests defined-ness; any SigningEnabled define
+    // would route into upstream's sign-tool path).
     expect(workflow).not.toContain("SignTool=InterceptorSign")
-    expect(workflow).not.toContain("/DSigningEnabled=1")
-    expect(workflow).toContain("/DSigningEnabled=0")
+    expect(workflow).not.toContain("/DSigningEnabled")
   })
 
   test("generates WinGet 1.12 manifests for both immutable installers", () => {
