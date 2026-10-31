@@ -80,8 +80,20 @@ function Install-Interceptor {
   try {
     $exe = Join-Path $tmp $asset
     Write-Host "==> Downloading Interceptor $version ($asset)"
-    Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $exe
-    Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS-ALL" -OutFile (Join-Path $tmp "SHA256SUMS-ALL")
+    if (-not (Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $exe -PassThru -ErrorAction SilentlyContinue)) {
+      if ($mode -eq "full") {
+        # This fork publishes Browser-only installers; fall back instead of failing.
+        Write-Host "==> No Full installer in this fork's release; falling back to Browser-only (pass -Browser next time)"
+        $mode = "browser"; $edition = "Browser"; $asset = "Interceptor-$edition-$version-windows-$arch.exe"
+        $exe = Join-Path $tmp $asset
+        Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $exe
+      } else { throw "Could not download $asset from $base" }
+    }
+    $sums = Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS-ALL" -OutFile (Join-Path $tmp "SHA256SUMS-ALL") -PassThru -ErrorAction SilentlyContinue
+    if (-not $sums) {
+      # Fork releases ship a per-release SHA256SUMS instead of the all-platform list.
+      Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS" -OutFile (Join-Path $tmp "SHA256SUMS-ALL")
+    }
 
     $line = Get-Content (Join-Path $tmp "SHA256SUMS-ALL") | Where-Object { ($_ -split '\s+')[1] -in @($asset, "*$asset") } | Select-Object -First 1
     if (-not $line) { throw "$asset is not listed in SHA256SUMS-ALL; nothing was installed." }
