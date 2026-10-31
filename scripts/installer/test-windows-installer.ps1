@@ -93,15 +93,13 @@ $installed = $false
 # untrusted publisher and aborts the whole install transaction.
 if ($Full) {
   Assert-True ($CerPath -and (Test-Path -LiteralPath $CerPath)) 'Full acceptance needs the fork code-signing .cer (-CerPath).'
-  # The cert is self-signed: it chains only to itself, so Get-AuthenticodeSignature
-  # reports NotTrusted unless it sits in a ROOT store (it is its own root), and
-  # Appx deployment wants TrustedPeople. Import to both, pre-install, because
-  # Setup registers the sparse MSIX itself.
+  # Minimal trust, on purpose: the cert exists only so Windows will deploy the
+  # sparse MSIX at all (unsigned packages are refused outright, not warned
+  # about). TrustedPeople is the documented mechanism for that; the installer
+  # EXE itself stays unsigned (SmartScreen warning is accepted), nothing is
+  # added to Root, and this import is removed again during cleanup below.
   $preTrust = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\TrustedPeople
   Assert-True ($null -ne $preTrust) 'Could not import the fork code-signing certificate (TrustedPeople).'
-  $preRoot = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\Root
-  Assert-True ($null -ne $preRoot) 'Could not import the fork code-signing certificate (Root).'
-  Write-Host "Fork cert imported: $($preRoot.Thumbprint) subject '$($preRoot.Subject)'"
 }
 
 try {
@@ -224,10 +222,9 @@ if ($Full) {
   $capOut = & $desktop capabilities 2>&1
   if ($LASTEXITCODE -ne 0) { Write-Host "capabilities output: $capOut" }
   Assert-True ($LASTEXITCODE -eq 0) 'interceptor-desktop capabilities did not run cleanly.'
-  # Leave the machine clean: unregister identity, drop trust anchors, uninstall the product.
+  # Leave the machine clean: unregister identity, drop the trust import, uninstall the product.
   & powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop' | Remove-AppxPackage"
   Remove-Item -LiteralPath ('Cert:\CurrentUser\TrustedPeople\' + $preTrust.Thumbprint) -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath ('Cert:\CurrentUser\Root\' + $preRoot.Thumbprint) -ErrorAction SilentlyContinue
   $unins = Join-Path $installRoot 'unins000.exe'
   Assert-True (Test-Path -LiteralPath $unins) 'Full install produced no uninstaller.'
   $proc = Start-Process -FilePath $unins -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG=$uninstallLog") -Wait -PassThru

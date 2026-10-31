@@ -293,6 +293,9 @@ jobs:
           # path. Without it Inno writes the uninstaller directly (unsigned).
           & '${{ steps.tools.outputs.iscc }}' "/DAppVersion=$version" "/DArtifactArch=x64" "/DFullInstall=1" scripts/installer/interceptor.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno compile failed: Full x64' }
+          # Ship the cert beside the installers: importing it to CurrentUser\TrustedPeople
+          # is the one prerequisite for the Full install (see docs/windows-install.md).
+          Copy-Item 'dist/windows/x64/desktop/notifications/fork-codesigning.cer' 'dist/release/windows/'
 
       - name: Install, verify, repair, and uninstall Full x64 package
         shell: pwsh
