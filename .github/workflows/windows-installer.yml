@@ -298,8 +298,17 @@ jobs:
           Copy-Item 'dist/windows/x64/desktop/notifications/fork-codesigning.cer' 'dist/release/windows/'
 
       - name: Install, verify, repair, and uninstall Full x64 package
+        id: full-acceptance
         shell: pwsh
         run: scripts/installer/test-windows-installer.ps1 -Installer "dist/release/windows/Interceptor-Full-${{ steps.version.outputs.version }}-windows-x64.exe" -Architecture x64 -Version "${{ steps.version.outputs.version }}" -Full -CerPath "dist/windows/x64/desktop/notifications/fork-codesigning.cer" -DisposableMachine
+
+      - name: Upload acceptance logs (always, for abort diagnosis)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-acceptance-logs-${{ steps.version.outputs.version }}
+          path: ${{ runner.temp }}/interceptor-*test.log
+          if-no-files-found: warn
 
       - name: Upload fork code-signing certificate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

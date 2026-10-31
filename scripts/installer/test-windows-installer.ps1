@@ -145,7 +145,13 @@ try {
   foreach ($hostKey in $hostKeys) {
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($hostKey)
     try {
-      Assert-True ($key.GetValue('') -eq $manifest) "Native-host registration mismatch: $hostKey"
+      $actual = $key.GetValue('')
+      if ($actual -cne $manifest) {
+        Write-Host "DIAGNOSTIC ${hostKey}: expected '$manifest', found '$actual'"
+        Write-Host "DIAGNOSTIC appx state:"
+        Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop' -ErrorAction SilentlyContinue | Format-List Name, Publisher, PackageFamilyName, Status, InstallLocation | Out-String | Write-Host
+      }
+      Assert-True ($actual -eq $manifest) "Native-host registration mismatch: $hostKey"
       Assert-True ($key.GetValue('AcceptanceSentinel') -eq 'preserve-me') "Named registry value was not preserved: $hostKey"
     } finally { $key.Dispose() }
   }
