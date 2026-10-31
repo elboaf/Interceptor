@@ -258,10 +258,7 @@ begin
   Params := '-NoProfile -NonInteractive -Mta -ExecutionPolicy Bypass -WindowStyle Hidden -File "' +
     Script + '" -Action ' + Action + ' -Root "' + AddBackslash(Root) + '." -Version {#AppVersion}';
   if TransactionId <> '' then Params := Params + ' -TransactionId ' + TransactionId;
-  // A pwsh ancestor poisons PSModulePath for this 5.1 child (module autoload of
-  // Get-AuthenticodeSignature/Get-AppxPackage breaks). Launch through cmd with a
-  // from-scratch, canonical module path so no inherited value can survive.
-  Params := '/d /c "set PSModulePath=& set PSModulePath=' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\Modules') + '&& "' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') + '" ' + Params + '"';
+  Params := '/d /c "set PSModulePath=' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\Modules') + '&& "' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') + '" ' + Params + '"'; // scrub a pwsh ancestor's module path
   Result := FileExists(Script) and ExecAndLogOutput(ExpandConstant('{cmd}'), Params, '', SW_HIDE, ewWaitUntilTerminated, ExitCode, nil) and (ExitCode = 0);
 end;
 #else
