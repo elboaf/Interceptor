@@ -38,8 +38,9 @@ jobs:
         shell: pwsh
         run: |
           # Fork (elboaf): the image family must match the lock exactly, and the roll must
-          # be at least the pinned version - Microsoft rolls this image weekly, so exact
-          # equality would break CI forever. Bun, Inno Setup, and SDK inputs stay hash-pinned.
+          # be at least the pinned version. GitHub runs several live rolls of this image at
+          # once during a rollout, so any exact pin is a lottery; the pin stays at the
+          # oldest roll in the fleet and only moves forward. Bun, Inno, and SDK stay hash-pinned.
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
           if ($env:ImageOS -ne $lock.runner.imageOS -or [version]$env:ImageVersion -lt [version]$lock.runner.imageVersion) {
             throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock requires $($lock.runner.imageOS) >= $($lock.runner.imageVersion))"
@@ -147,8 +148,9 @@ jobs:
         shell: pwsh
         run: |
           # Fork (elboaf): the image family must match the lock exactly, and the roll must
-          # be at least the pinned version - Microsoft rolls this image weekly, so exact
-          # equality would break CI forever. Bun, Inno Setup, and SDK inputs stay hash-pinned.
+          # be at least the pinned version. GitHub runs several live rolls of this image at
+          # once during a rollout, so any exact pin is a lottery; the pin stays at the
+          # oldest roll in the fleet and only moves forward. Bun, Inno, and SDK stay hash-pinned.
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
           if ($env:ImageOS -ne $lock.runner.imageOS -or [version]$env:ImageVersion -lt [version]$lock.runner.imageVersion) {
             throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock requires $($lock.runner.imageOS) >= $($lock.runner.imageVersion))"
