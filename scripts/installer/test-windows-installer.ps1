@@ -93,7 +93,7 @@ $installed = $false
 # untrusted publisher and aborts the whole install transaction.
 if ($Full) {
   Assert-True ($CerPath -and (Test-Path -LiteralPath $CerPath)) 'Full acceptance needs the fork code-signing .cer (-CerPath).'
-  $preTrust = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:CurrentUserTrustedPeople
+  $preTrust = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\TrustedPeople
   Assert-True ($null -ne $preTrust) 'Could not import the fork code-signing certificate.'
 }
 
