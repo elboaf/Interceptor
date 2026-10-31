@@ -37,9 +37,12 @@ jobs:
       - name: Verify runner image before executing tools
         shell: pwsh
         run: |
+          # Fork (elboaf): the image family must match the lock exactly, and the roll must
+          # be at least the pinned version - Microsoft rolls this image weekly, so exact
+          # equality would break CI forever. Bun, Inno Setup, and SDK inputs stay hash-pinned.
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
-          if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) {
-            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock wants $($lock.runner.imageOS) $($lock.runner.imageVersion); bump the lock when the windows-2025 image rolls)"
+          if ($env:ImageOS -ne $lock.runner.imageOS -or [version]$env:ImageVersion -lt [version]$lock.runner.imageVersion) {
+            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock requires $($lock.runner.imageOS) >= $($lock.runner.imageVersion))"
           }
 
       - name: Resolve and verify release version
@@ -143,9 +146,12 @@ jobs:
       - name: Verify runner image before executing tools
         shell: pwsh
         run: |
+          # Fork (elboaf): the image family must match the lock exactly, and the roll must
+          # be at least the pinned version - Microsoft rolls this image weekly, so exact
+          # equality would break CI forever. Bun, Inno Setup, and SDK inputs stay hash-pinned.
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
-          if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) {
-            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock wants $($lock.runner.imageOS) $($lock.runner.imageVersion); bump the lock when the windows-2025 image rolls)"
+          if ($env:ImageOS -ne $lock.runner.imageOS -or [version]$env:ImageVersion -lt [version]$lock.runner.imageVersion) {
+            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock requires $($lock.runner.imageOS) >= $($lock.runner.imageVersion))"
           }
 
       - name: Resolve version
