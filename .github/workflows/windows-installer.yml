@@ -137,8 +137,17 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-unsigned-${{ steps.version.outputs.version }}
+          path: dist/windows
+          if-no-files-found: error
+          retention-days: 1
+
+      # Separate artifact: uploading these beside dist/windows would change the
+      # artifact's common root and re-root every other path on download.
+      - name: Upload native provider payloads
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-provider-${{ steps.version.outputs.version }}
           path: |
-            dist/windows
             interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-desktop.exe
             interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-notification-badge.exe
           if-no-files-found: error
@@ -182,6 +191,11 @@ jobs:
         with:
           name: windows-unsigned-${{ steps.version.outputs.version }}
           path: dist/windows
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: windows-provider-${{ steps.version.outputs.version }}
+          path: dist/provider
 
       # Acquire the pinned Inno Setup plus the Windows SDK build tools (signtool,
       # mt.exe, makeappx.exe), hash-checked against the toolchain lock.
@@ -242,8 +256,8 @@ jobs:
           $version = '${{ steps.version.outputs.version }}'
           $stage = 'dist/windows/x64'
           New-Item -ItemType Directory -Force -Path "$stage/desktop" | Out-Null
-          $provider = 'interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-desktop.exe'
-          $badge = 'interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-notification-badge.exe'
+          $provider = 'dist/provider/interceptor-desktop.exe'
+          $badge = 'dist/provider/interceptor-notification-badge.exe'
           bun scripts/provider-version.ts "$provider" "$version"
           if ($LASTEXITCODE -ne 0) { throw 'Provider was not built as this release version' }
           Copy-Item $provider, $badge -Destination "$stage/desktop/"
