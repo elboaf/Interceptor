@@ -4,13 +4,15 @@ param(
   [Parameter(Mandatory = $true)][ValidateSet('x64', 'arm64')][string]$Architecture,
   [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
   [string]$SignTool = '',
+  [string]$CerPath = '',
+  [switch]$Full,
   [switch]$DisposableMachine
 )
 
 $ErrorActionPreference = 'Stop'
 $Installer = (Resolve-Path -LiteralPath $Installer).Path
 $productKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B7F4D8A1-3E22-4B91-A6E4-9C2D5F8A1234}_is1'
-$stateKey = 'Software\Hacker Valley Media\Interceptor\Installer\State'
+$stateKey = 'Software\elboaf\Interceptor\Installer\State'
 $hostKeys = @(
   'Software\Google\Chrome\NativeMessagingHosts\com.interceptor.host',
   'Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.interceptor.host',
@@ -169,6 +171,45 @@ try {
     Write-RegistrySnapshot $hostKey 'AcceptanceSentinel' $hostSentinelSnapshots[$hostKey]
   }
   Remove-Item -LiteralPath (Join-Path $env:TEMP 'interceptor.installing') -Force -ErrorAction SilentlyContinue
+}
+
+# ===== Fork (elboaf) Full-install acceptance =====
+# Exercises what upstream's signed build got for free: a fork self-signed sparse
+# package needs its .cer in TrustedPeople before Add-AppxPackage accepts it. This
+# proves the fork identity round-trips on a real Windows install.
+if ($Full) {
+  Assert-True ($CerPath -and (Test-Path -LiteralPath $CerPath)) 'Full acceptance needs the fork code-signing .cer (-CerPath).'
+  $familyName = 'Elboaf.Interceptor.Desktop_eqw9pvz3h4s3p'
+  $desktop = Join-Path $installRoot 'interceptor-desktop.exe'
+  $badge = Join-Path $installRoot 'interceptor-notification-badge.exe'
+  $contacts = Join-Path $installRoot 'interceptor-contacts-native.exe'
+  $msix = Join-Path $installRoot 'notification-identity.msix'
+  foreach ($path in @($desktop, $badge, $contacts, $msix)) { Assert-True (Test-Path -LiteralPath $path) "Full payload missing after install: $path" }
+  $sig = Get-AuthenticodeSignature -LiteralPath $desktop
+  Assert-True ($sig.Status -eq 'Valid') "Provider payload is not self-signature-valid: $($sig.Status)"
+  $imported = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+  Assert-True ($null -ne $imported) 'Could not import the fork code-signing certificate.'
+  $identity = & powershell -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '$msix' -ExternalLocation '$installRoot'; if (-not \$?) { exit 1 }"
+  Assert-True ($LASTEXITCODE -eq 0) 'Sparse package registration (Add-AppxPackage -ExternalLocation) failed.'
+  $registered = Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop'
+  Assert-True ($null -ne $registered) 'Fork package identity is not registered after Add-AppxPackage.'
+  Assert-True ($registered.Publisher -ceq 'CN=elboaf') 'Registered package publisher differs from the fork identity.'
+  Assert-True ($registered.PackageFamilyName -ceq $familyName) 'Registered package family name differs from the fork identity.'
+  $startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Interceptor Desktop {B7F4D8A1-3E22-4B91-A6E4-9C2D5F8A1234}.lnk'
+  Assert-True (Test-Path -LiteralPath $startupLink) 'Full-install startup link was not created.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $installRoot 'skills\interceptor-desktop\SKILL.md')) 'Native-app skill was not installed.'
+  & $desktop capabilities 2>&1 | Out-Null
+  Assert-True ($LASTEXITCODE -eq 0) 'interceptor-desktop capabilities did not run cleanly.'
+  # Leave the machine clean: unregister identity, drop trust anchor, uninstall the product.
+  & powershell -NoProfile -NonInteractive -Command "Get-AppxPackage -Name 'Elboaf.Interceptor.Desktop' | Remove-AppxPackage"
+  Remove-Item -LiteralPath ('Cert:\CurrentUser\TrustedPeople\' + $imported.Thumbprint) -ErrorAction SilentlyContinue
+  $unins = Join-Path $installRoot 'unins000.exe'
+  Assert-True (Test-Path -LiteralPath $unins) 'Full install produced no uninstaller.'
+  $proc = Start-Process -FilePath $unins -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG=$uninstallLog") -Wait -PassThru
+  Assert-True ($proc.ExitCode -eq 0) "Full uninstall failed with exit code $($proc.ExitCode)."
+  Assert-True (-not (Test-Path -LiteralPath $desktop)) 'Provider remained after Full uninstall.'
+  Assert-True ($null -eq [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($stateKey)) 'Installer state remained after Full uninstall.'
+  Write-Host 'Full-install acceptance passed: identity, payload, startup, capabilities, uninstall.'
 }
 
 Write-Host "Windows installer acceptance passed: $Architecture $Version"

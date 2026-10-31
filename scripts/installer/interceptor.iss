@@ -21,8 +21,8 @@
   #define InstallLabel "Browser-Only"
 #endif
 #define ProductGuid "B7F4D8A1-3E22-4B91-A6E4-9C2D5F8A1234"
-#define NotificationAppId "HackerValleyMedia.Interceptor.Desktop"
-#define BadgeAppId "HackerValleyMedia.Interceptor.Desktop_4xfsjzhwq8rce!Desktop"
+#define NotificationAppId "Elboaf.Interceptor.Desktop"
+#define BadgeAppId "Elboaf.Interceptor.Desktop_eqw9pvz3h4s3p!Desktop"
 #define NotificationActivator "811E51B6-6CC5-4FAB-B922-C733988093B5"
 #define ProductAppId "{" + ProductGuid + "}"
 #if ArtifactArch == "x64"
@@ -39,7 +39,7 @@ AppId={{{#ProductGuid}}
 AppName=Interceptor
 AppVersion={#AppVersion}
 AppVerName=Interceptor ({#InstallLabel}) {#AppVersion}
-AppPublisher=Hacker Valley Media
+AppPublisher=elboaf
 AppPublisherURL=https://github.com/Hacker-Valley-Media/Interceptor
 AppSupportURL=https://github.com/Hacker-Valley-Media/Interceptor/issues
 AppUpdatesURL=https://github.com/Hacker-Valley-Media/Interceptor/releases
@@ -73,11 +73,11 @@ UninstallLogMode=overwrite
 UninstallDisplayIcon={app}\interceptor.ico
 UninstallDisplayName=Interceptor ({#InstallLabel})
 VersionInfoVersion={#AppVersion}
-VersionInfoCompany=Hacker Valley Media
+VersionInfoCompany=elboaf
 VersionInfoDescription=Interceptor {#InstallLabel} Setup
 VersionInfoProductName=Interceptor
 VersionInfoProductVersion={#AppVersion}
-VersionInfoCopyright=Copyright (c) Hacker Valley Media
+VersionInfoCopyright=Copyright (c) elboaf
 AllowNoIcons=yes
 AllowCancelDuringInstall=yes
 DisableWelcomePage=no
@@ -180,9 +180,9 @@ Filename: "https://github.com/Hacker-Valley-Media/Interceptor/blob/v{#AppVersion
 [Code]
 const
   ProductUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#ProductAppId}_is1';
-  InstallerRoot = 'Software\Hacker Valley Media\Interceptor\Installer';
-  StateKey = 'Software\Hacker Valley Media\Interceptor\Installer\State';
-  PendingKey = 'Software\Hacker Valley Media\Interceptor\Installer\Pending';
+  InstallerRoot = 'Software\elboaf\Interceptor\Installer';
+  StateKey = 'Software\elboaf\Interceptor\Installer\State';
+  PendingKey = 'Software\elboaf\Interceptor\Installer\Pending';
   EnvironmentKey = 'Environment';
   ChromeHostKey = 'Software\Google\Chrome\NativeMessagingHosts\com.interceptor.host';
   BraveHostKey = 'Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.interceptor.host';
@@ -887,7 +887,7 @@ begin
   begin
     RegDeleteKeyIncludingSubkeys(HKCU, StateKey);
     RegDeleteKeyIfEmpty(HKCU, InstallerRoot);
-    RegDeleteKeyIfEmpty(HKCU, 'Software\Hacker Valley Media\Interceptor');
+    RegDeleteKeyIfEmpty(HKCU, 'Software\elboaf\Interceptor');
     DeleteFile(GuardPath);
   end;
 end;

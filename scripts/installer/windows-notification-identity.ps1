@@ -9,11 +9,11 @@ $ProgressPreference='SilentlyContinue'
 if((Get-Process -Id $PID).SessionId -eq 0){throw 'Notification identity maintenance requires the graphical login'}
 if(-not [IO.Path]::IsPathRooted($Root)){throw 'An absolute owned installation root is required'}
 $Root=[IO.Path]::GetFullPath($Root).TrimEnd('\')
-$name='HackerValleyMedia.Interceptor.Desktop'
-$publisher='CN=Hacker Valley Media LLC, O=Hacker Valley Media LLC, L=Austin, S=Texas, C=US'
-$family=$name+'_4xfsjzhwq8rce'
-$statePath='HKCU:\Software\Hacker Valley Media\Interceptor\Installer\State'
-$pendingPath='HKCU:\Software\Hacker Valley Media\Interceptor\Installer\Pending\NotificationIdentity'
+$name='Elboaf.Interceptor.Desktop'
+$publisher='CN=elboaf'
+$family=$name+'_eqw9pvz3h4s3p'
+$statePath='HKCU:\Software\elboaf\Interceptor\Installer\State'
+$pendingPath='HKCU:\Software\elboaf\Interceptor\Installer\Pending\NotificationIdentity'
 $payload=Join-Path $Root 'notification-identity.msix'
 function Require-ReceiptKinds([string]$Path,[string[]]$Numbers,[string[]]$Strings,[string[]]$Flags=@()) {
  $key=Get-Item -LiteralPath $Path
@@ -70,11 +70,11 @@ function Read-Transaction {
  Require-ReceiptKinds $pendingPath @() @('Root','TransactionId','BackupPath','PriorFullName','PriorSHA256','TargetFullName') @('DeploymentUncertain','Finalized')
  $p=Get-ItemProperty -LiteralPath $pendingPath
  if($null -ne $p.NotificationPackageFullName){Require-ReceiptKinds $pendingPath @() @('NotificationPackageFullName')}
- if($p.Root -ne $Root -or $p.TargetFullName -notmatch '^HackerValleyMedia\.Interceptor\.Desktop_\d+\.\d+\.\d+\.0_neutral__4xfsjzhwq8rce$'){throw 'Notification transaction identity differs'}
+ if($p.Root -ne $Root -or $p.TargetFullName -notmatch '^Elboaf\.Interceptor\.Desktop_\d+\.\d+\.\d+\.0_neutral__eqw9pvz3h4s3p$'){throw 'Notification transaction identity differs'}
  $guid=[guid]::ParseExact($p.TransactionId,'D')
  $backup=Join-Path $env:LOCALAPPDATA ('Interceptor\Installer\NotificationRollback\'+$guid.ToString()+'\prior.msix')
  if($p.BackupPath -ne $backup){throw 'Notification rollback path differs'}
- if($p.PriorFullName -ne '' -and ($p.PriorFullName -notmatch '^HackerValleyMedia\.Interceptor\.Desktop_\d+\.\d+\.\d+\.0_neutral__4xfsjzhwq8rce$' -or $p.PriorSHA256 -notmatch '^[0-9a-f]{64}$')){throw 'Notification prior identity receipt differs'}
+ if($p.PriorFullName -ne '' -and ($p.PriorFullName -notmatch '^Elboaf\.Interceptor\.Desktop_\d+\.\d+\.\d+\.0_neutral__eqw9pvz3h4s3p$' -or $p.PriorSHA256 -notmatch '^[0-9a-f]{64}$')){throw 'Notification prior identity receipt differs'}
  return $p
 }
 function Remove-OwnedBackup($Pending) {
@@ -137,7 +137,7 @@ switch($Action){
    $prior=[string]$current.PackageFullName
   }
   New-Item -Path $pendingPath -Force|Out-Null
-  foreach($entry in @{Root=$Root;TransactionId=$guid.ToString();BackupPath=$backup;PriorFullName=$prior;PriorSHA256=$hash;TargetFullName=($name+'_'+$Version+'.0_neutral__4xfsjzhwq8rce')}.GetEnumerator()){New-ItemProperty -LiteralPath $pendingPath -Name $entry.Key -Value $entry.Value -PropertyType String -Force|Out-Null}
+  foreach($entry in @{Root=$Root;TransactionId=$guid.ToString();BackupPath=$backup;PriorFullName=$prior;PriorSHA256=$hash;TargetFullName=($name+'_'+$Version+'.0_neutral__eqw9pvz3h4s3p')}.GetEnumerator()){New-ItemProperty -LiteralPath $pendingPath -Name $entry.Key -Value $entry.Value -PropertyType String -Force|Out-Null}
   if($current){
    New-Item -ItemType Directory -Path (Split-Path $backup)|Out-Null
    Copy-Item -LiteralPath $payload -Destination $backup

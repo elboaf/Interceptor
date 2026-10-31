@@ -23,7 +23,7 @@ fn main() {
             if session==0||shell.is_invalid()||session!=shell_session{return Err("badge requires this user's graphical login".into());}
             let mut id=[0u16;256];let mut length=id.len()as u32;
             GetCurrentApplicationUserModelId(&mut length,Some(PWSTR(id.as_mut_ptr()))).ok().map_err(|e|format!("installed badge package identity is required: {e}"))?;
-            let aumid="HackerValleyMedia.Interceptor.Desktop_4xfsjzhwq8rce!Desktop";
+            let aumid="Elboaf.Interceptor.Desktop_eqw9pvz3h4s3p!Desktop";
             if length==0||length as usize>id.len()||id[length as usize-1]!=0||String::from_utf16(&id[..length as usize-1]).map_err(|e|e.to_string())?!=aumid{return Err("badge package AUMID differs".into());}
             let mut external=vec![0u16;32768];let mut length=external.len()as u32;
             GetCurrentPackagePath2(PackagePathType_EffectiveExternal,&mut length,Some(PWSTR(external.as_mut_ptr()))).ok().map_err(|e|e.to_string())?;

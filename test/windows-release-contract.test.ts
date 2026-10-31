@@ -204,9 +204,12 @@ describe("Windows production release contract", () => {
     const workflow = read(".github/workflows/windows-installer.yml")
     expect(workflow).toContain("windows-x64")
     expect(workflow).not.toContain("windows-arm64")
-    // Unsigned: the fork lane compiles without Inno's sign-tool define.
-    expect(workflow).not.toContain("SigningEnabled")
-    expect(workflow).not.toContain("/SInterceptorSign")
+    // Unsigned browser lane: no Inno sign tool is wired and no signing define is
+    // passed for the Browser installer (the Full lane uses SigningEnabled=0, the
+    // explicit no-sign spelling).
+    expect(workflow).not.toContain("SignTool=InterceptorSign")
+    expect(workflow).not.toContain("/DSigningEnabled=1")
+    expect(workflow).toContain("/DSigningEnabled=0")
   })
 
   test("generates WinGet 1.12 manifests for both immutable installers", () => {
@@ -218,15 +221,15 @@ describe("Windows production release contract", () => {
       "--output", resolve(root, "dist/release/winget"),
     ])
     const manifests = renderManifests(options)
-    const installer = manifests["HackerValleyMedia.Interceptor.installer.yaml"]
+    const installer = manifests["Elboaf.Interceptor.installer.yaml"]
     expect(installer).toContain("ManifestVersion: 1.12.0")
     expect(installer).toContain("InstallerType: inno")
     expect(installer).toContain("Scope: user")
     expect(installer).toContain("MinimumOSVersion: 10.0.19045.0")
     expect(installer).toContain("Architecture: x64")
-    expect(installer).toContain("Architecture: arm64")
+    expect(installer).toContain("Architecture: x64")
     expect(installer).toContain("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART")
-    expect(installer).toContain("Interceptor-Browser-1.2.3-windows-arm64.exe")
+    expect(installer).toContain("Interceptor-Browser-1.2.3-windows-x64.exe")
   })
 
   test("ships the extension on disk for Load unpacked without auto-loading it", () => {

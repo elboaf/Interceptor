@@ -50,7 +50,7 @@ use windows::{
 
 // Keep the toast identity stable. Package identity belongs only to the badge
 // helper, so an upgrade does not discard or replay the existing native queue.
-const AUMID: &str = "HackerValleyMedia.Interceptor.Desktop";
+const AUMID: &str = "Elboaf.Interceptor.Desktop";
 const ACTIVATOR: GUID = GUID::from_u128(0x811e51b6_6cc5_4fab_b922_c733988093b5);
 const ACTIVATED: &str = "Windows.UI.Notifications.ToastNotification.Activated";
 const CLOSED: &str = "Windows.UI.Notifications.ToastNotification.Dismissed";
@@ -1074,7 +1074,7 @@ impl Worker {
                         if Instant::now()>=deadline{return Err(failure("timeout_unknown_outcome","badge helper did not exit; native outcome is unknown"));}
                         std::thread::sleep(Duration::from_millis(5));
                     }
-                    if reply!=json!({"success":true,"count":count,"aumid":"HackerValleyMedia.Interceptor.Desktop_4xfsjzhwq8rce!Desktop"}){
+                    if reply!=json!({"success":true,"count":count,"aumid":"Elboaf.Interceptor.Desktop_eqw9pvz3h4s3p!Desktop"}){
                         return Err(error("badge helper receipt differs"));
                     }
                     Ok(

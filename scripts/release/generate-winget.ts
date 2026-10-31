@@ -5,7 +5,7 @@ import { resolve } from "node:path"
 
 const VERSION = /^\d+\.\d+\.\d+$/
 const SHA256 = /^[0-9a-f]{64}$/i
-const PACKAGE_ID = "HackerValleyMedia.Interceptor"
+const PACKAGE_ID = "Elboaf.Interceptor"
 
 type Options = {
   version: string

@@ -32,8 +32,8 @@ foreach($tool in @('mt.exe','makeappx.exe')){
   $signature=Get-AuthenticodeSignature -LiteralPath (Join-Path $sdk $tool)
   if($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike 'CN=Microsoft Windows Kits Publisher,*'){throw ('Invalid SDK signing identity: '+$tool)}
 }
-$name='HackerValleyMedia.Interceptor.Desktop'
-$publisher='CN=Hacker Valley Media LLC, O=Hacker Valley Media LLC, L=Austin, S=Texas, C=US'
+$name='Elboaf.Interceptor.Desktop'
+$publisher='CN=elboaf'
 $output=Join-Path $stage 'desktop\notifications'
 if(Test-Path -LiteralPath $output){throw 'Notification identity output already exists'}
 $package=Join-Path $output 'package'
@@ -103,4 +103,4 @@ foreach($application in $executables){
 $identity=$embedded.assembly.msix
 if($identity.packageName -ne $name -or $identity.publisher -ne $publisher -or $identity.applicationId -ne $application.id){throw 'Embedded desktop application identity differs'}
 }
-[ordered]@{packageName=$name;aumid=$name+'_4xfsjzhwq8rce!Desktop';version=$Version+'.0';architecture=$Arch;badgeHelperSHA256=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant();contactsHelperSHA256=(Get-FileHash $contacts -Algorithm SHA256).Hash.ToLowerInvariant();msixSHA256=(Get-FileHash (Join-Path $output 'notification-identity.msix') -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json
+[ordered]@{packageName=$name;aumid=$name+'_eqw9pvz3h4s3p!Desktop';version=$Version+'.0';architecture=$Arch;badgeHelperSHA256=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant();contactsHelperSHA256=(Get-FileHash $contacts -Algorithm SHA256).Hash.ToLowerInvariant();msixSHA256=(Get-FileHash (Join-Path $output 'notification-identity.msix') -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json

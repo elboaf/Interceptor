@@ -14,7 +14,7 @@ pub(crate) fn installed_identity()->Result<(),Value>{
     unsafe{
         let mut id=[0u16;256];let mut length=id.len()as u32;
         GetCurrentApplicationUserModelId(&mut length,Some(PWSTR(id.as_mut_ptr()))).ok().map_err(|_|failure("not_installed","Contacts requires its installed sparse-package application identity"))?;
-        if length==0||length as usize>id.len()||id[length as usize-1]!=0||String::from_utf16(&id[..length as usize-1]).ok().as_deref()!=Some("HackerValleyMedia.Interceptor.Desktop_4xfsjzhwq8rce!Contacts"){return Err(failure("unsupported_target","native Contacts package application identity differs"));}
+        if length==0||length as usize>id.len()||id[length as usize-1]!=0||String::from_utf16(&id[..length as usize-1]).ok().as_deref()!=Some("Elboaf.Interceptor.Desktop_eqw9pvz3h4s3p!Contacts"){return Err(failure("unsupported_target","native Contacts package application identity differs"));}
         let mut external=vec![0u16;32768];let mut length=external.len()as u32;
         GetCurrentPackagePath2(PackagePathType_EffectiveExternal,&mut length,Some(PWSTR(external.as_mut_ptr()))).ok().map_err(native_error)?;
         if length==0||length as usize>external.len()||external[length as usize-1]!=0{return Err(failure("provider_failed","native Contacts package external location is invalid"));}

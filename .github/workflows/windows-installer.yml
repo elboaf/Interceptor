@@ -108,6 +108,13 @@ jobs:
         run: |
           bash scripts/build.sh --target=windows-x64
 
+      # Fork (elboaf) Full installer: build the native provider (Rust) on the
+      # runner. Upstream builds this on a Mac cross toolchain or a dev box; a
+      # native windows-2025 runner needs no cross plumbing at all.
+      - name: Build native provider (Rust, x64)
+        shell: pwsh
+        run: bun scripts/build-desktop-windows.ts x64 build
+
       - name: Verify versions and PE architectures
         shell: pwsh
         run: |
@@ -130,7 +137,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-unsigned-${{ steps.version.outputs.version }}
-          path: dist/windows
+          path: |
+            dist/windows
+            interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-desktop.exe
+            interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-notification-badge.exe
           if-no-files-found: error
           retention-days: 1
 
@@ -173,10 +183,9 @@ jobs:
           name: windows-unsigned-${{ steps.version.outputs.version }}
           path: dist/windows
 
-      # Acquire the pinned Inno Setup (hash-checked against the toolchain lock).
-      # No signing toolchain: this fork ships unsigned artifacts. Inno Setup 7's
-      # license needs acknowledgment before use, same gate upstream applies.
-      - name: Acquire pinned Inno Setup
+      # Acquire the pinned Inno Setup plus the Windows SDK build tools (signtool,
+      # mt.exe, makeappx.exe), hash-checked against the toolchain lock.
+      - name: Acquire pinned Inno Setup and Windows SDK
         id: tools
         shell: pwsh
         run: |
@@ -192,6 +201,13 @@ jobs:
           $innoRoot = Join-Path $toolRoot 'inno'
           $proc = Start-Process $innoInstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER',("/DIR=$innoRoot") -Wait -PassThru
           if ($proc.ExitCode -ne 0) { throw 'Pinned Inno Setup installation failed' }
+          $sdkPackage = Join-Path $toolRoot 'windows-sdk.zip'
+          Invoke-WebRequest -Uri $lock.windowsSdkBuildTools.url -OutFile $sdkPackage
+          if ((Get-FileHash $sdkPackage -Algorithm SHA256).Hash.ToLowerInvariant() -ne $lock.windowsSdkBuildTools.sha256) { throw 'Hash mismatch: windows-sdk.zip' }
+          Expand-Archive $sdkPackage (Join-Path $toolRoot 'sdk') -Force
+          $sdkBin = (Get-ChildItem (Join-Path $toolRoot 'sdk/bin') -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName + '/x64'
+          foreach ($tool in 'signtool.exe','mt.exe','makeappx.exe') { if (-not (Test-Path (Join-Path $sdkBin $tool))) { throw "SDK layout differs: missing $tool" } }
+          "sdkbin=$sdkBin" >> $env:GITHUB_OUTPUT
           "iscc=$innoRoot/ISCC.exe" >> $env:GITHUB_OUTPUT
 
       # Unsigned build: no Inno sign tool is passed and no signing define is set;
@@ -213,6 +229,62 @@ jobs:
       - name: Install, verify, repair, and uninstall x64 package
         shell: pwsh
         run: scripts/installer/test-windows-installer.ps1 -Installer "dist/release/windows/Interceptor-Browser-${{ steps.version.outputs.version }}-windows-x64.exe" -Architecture x64 -Version "${{ steps.version.outputs.version }}" -DisposableMachine
+
+      # ===== Fork (elboaf) Full installer =====
+      # The sparse-MSIX package identity is fork-owned (Elboaf.Interceptor.Desktop /
+      # CN=elboaf). A per-run self-signed code-signing certificate supplies the
+      # publisher subject; Windows derives package identity from the subject string,
+      # so the family name is stable across runs even though the key pair is not.
+      # Machines that want Authenticode-valid installs import the published .cer.
+      - name: Stage desktop payloads and embed package identity
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $stage = 'dist/windows/x64'
+          New-Item -ItemType Directory -Force -Path "$stage/desktop" | Out-Null
+          $provider = 'interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-desktop.exe'
+          $badge = 'interceptor-desktop/target/x86_64-pc-windows-msvc/release/interceptor-notification-badge.exe'
+          bun scripts/provider-version.ts "$provider" "$version"
+          if ($LASTEXITCODE -ne 0) { throw 'Provider was not built as this release version' }
+          Copy-Item $provider, $badge -Destination "$stage/desktop/"
+          & scripts/installer/build-windows-notification-identity.ps1 -StageDir $stage -SdkBin '${{ steps.tools.outputs.sdkbin }}' -Version $version -Arch x64
+          if ($LASTEXITCODE -ne 0) { throw 'Identity embedding failed' }
+
+      - name: Sign payloads with the per-run self-signed certificate
+        id: sign
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'fork-signing.pfx'
+          & scripts/installer/new-fork-certificate.ps1 -PfxPath $pfx -PasswordText (New-Guid).Guid
+          if ($LASTEXITCODE -ne 0) { throw 'Certificate creation failed' }
+          $signtool = '${{ steps.tools.outputs.sdkbin }}/signtool.exe'
+          $timestamp = 'http://timestamp.digicert.com'
+          $targets = @('dist/windows/x64/interceptor.exe', 'dist/windows/x64/daemon/interceptor-daemon.exe',
+            'dist/windows/x64/desktop/interceptor-desktop.exe', 'dist/windows/x64/desktop/interceptor-notification-badge.exe',
+            'dist/windows/x64/desktop/interceptor-contacts-native.exe', 'dist/windows/x64/desktop/notifications/notification-identity.msix')
+          foreach ($file in $targets) {
+            & $signtool sign /v /fd SHA256 /f $pfx /tr $timestamp /td SHA256 $file
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $file" }
+          }
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'fork-codesigning.cer') 'dist/windows/x64/desktop/notifications/fork-codesigning.cer'
+
+      - name: Compile Full x64 installer
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          & '${{ steps.tools.outputs.iscc }}' "/DAppVersion=$version" "/DArtifactArch=x64" "/DFullInstall=1" "/DSigningEnabled=0" scripts/installer/interceptor.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno compile failed: Full x64' }
+
+      - name: Install, verify, repair, and uninstall Full x64 package
+        shell: pwsh
+        run: scripts/installer/test-windows-installer.ps1 -Installer "dist/release/windows/Interceptor-Full-${{ steps.version.outputs.version }}-windows-x64.exe" -Architecture x64 -Version "${{ steps.version.outputs.version }}" -Full -CerPath "dist/windows/x64/desktop/notifications/fork-codesigning.cer" -DisposableMachine
+
+      - name: Upload fork code-signing certificate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fork-codesigning-${{ steps.version.outputs.version }}
+          path: dist/windows/x64/desktop/notifications/fork-codesigning.cer
+          if-no-files-found: error
 
       - name: Upload release candidates
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

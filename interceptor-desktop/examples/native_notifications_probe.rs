@@ -49,7 +49,7 @@
                     let result=ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(api_id)).and_then(|n|n.Setting());
                     rows.push(json!({"step":"WithId notifier contract","id":api_id,"setting":result.as_ref().ok().map(|s|format!("{s:?}")),"error":result.err().map(|e|e.to_string())}));
                 }
-                let legacy=HSTRING::from("HackerValleyMedia.Interceptor.Desktop");
+                let legacy=HSTRING::from("Elboaf.Interceptor.Desktop");
                 let legacy_notifier=ToastNotificationManager::CreateToastNotifierWithId(&legacy)?;
                 let legacy_pending=legacy_notifier.GetScheduledToastNotifications()?;
                 let legacy_history=history.GetHistoryWithId(&legacy)?;
@@ -200,7 +200,7 @@
                 rows.push(json!({"step":"unshown scheduled ID round trip","length":length,"id":result.as_ref().ok().map(|v|v.to_string()),"error":result.err().map(|e|e.to_string())}));
             }
             let history=ToastNotificationManager::History()?;rows.push(json!({"step":"History"}));
-            let list=history.GetHistoryWithId(&HSTRING::from("HackerValleyMedia.Interceptor.Desktop"))?;rows.push(json!({"step":"GetHistoryWithId"}));
+            let list=history.GetHistoryWithId(&HSTRING::from("Elboaf.Interceptor.Desktop"))?;rows.push(json!({"step":"GetHistoryWithId"}));
             let size=list.Size()?;rows.push(json!({"step":"Size","value":size}));
             for i in 0..size {
                 let t=list.GetAt(i)?;rows.push(json!({"step":"GetAt","index":i}));
@@ -215,8 +215,8 @@
                 let owned=metadata["namespace"]=="badge_diag_1791259564689" && metadata["token"]=="0FC3C21C-1F85-4991-B49F-FA043EDFAD77" && metadata["entry"]["nativeIdentifier"]=="winrt:250bbce3eba53d4e0410b10b6e519f28f8221eee62f1532e03722345e56b5554:788e916629277ad153caeddefdd62487962caebb4355a2bacb19dcd5850b291b";
                 rows.push(json!({"step":"GetAttribute","ownedDiagnostic":owned,"metadata":if owned{metadata}else{Value::Null}}));
                 if mode.as_deref()==Some("cleanup-diagnostic") && owned {
-                    history.RemoveGroupedTagWithId(&HSTRING::from("788e916629277ad153caeddefdd62487962caebb4355a2bacb19dcd5850b291b"),&HSTRING::from("250bbce3eba53d4e0410b10b6e519f28f8221eee62f1532e03722345e56b5554"),&HSTRING::from("HackerValleyMedia.Interceptor.Desktop"))?;
-                    rows.push(json!({"step":"removed exact recorded owned diagnostic tag/group","remaining":history.GetHistoryWithId(&HSTRING::from("HackerValleyMedia.Interceptor.Desktop"))?.Size()?}));
+                    history.RemoveGroupedTagWithId(&HSTRING::from("788e916629277ad153caeddefdd62487962caebb4355a2bacb19dcd5850b291b"),&HSTRING::from("250bbce3eba53d4e0410b10b6e519f28f8221eee62f1532e03722345e56b5554"),&HSTRING::from("Elboaf.Interceptor.Desktop"))?;
+                    rows.push(json!({"step":"removed exact recorded owned diagnostic tag/group","remaining":history.GetHistoryWithId(&HSTRING::from("Elboaf.Interceptor.Desktop"))?.Size()?}));
                 }
             }
             Ok(())

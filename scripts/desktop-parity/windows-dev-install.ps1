@@ -29,8 +29,8 @@ $mt = Join-Path $Sdk 'mt.exe'
 if ((Test-Path $contacts) -and (Test-Path $mt)) {
   if (-not (Test-Path (Join-Path $backup 'interceptor-contacts-native.exe'))) { Copy-Item $contacts (Join-Path $backup 'interceptor-contacts-native.exe') }
   Copy-Item (Join-Path $install 'interceptor-desktop.exe') $contacts -Force
-  $name = 'HackerValleyMedia.Interceptor.Desktop'
-  $publisher = 'CN=Hacker Valley Media LLC, O=Hacker Valley Media LLC, L=Austin, S=Texas, C=US'
+  $name = 'Elboaf.Interceptor.Desktop'
+  $publisher = 'CN=elboaf'
   $assembly = "<?xml version=`"1.0`" encoding=`"utf-8`"?><assembly manifestVersion=`"1.0`" xmlns=`"urn:schemas-microsoft-com:asm.v1`"><assemblyIdentity version=`"$Version.0`" name=`"$name`"/><msix xmlns=`"urn:schemas-microsoft-com:msix.v1`" publisher=`"$publisher`" packageName=`"$name`" applicationId=`"Contacts`"/></assembly>"
   $manifestPath = Join-Path $Stage 'Contacts.application.manifest'
   [IO.File]::WriteAllText($manifestPath, $assembly, (New-Object Text.UTF8Encoding($false)))

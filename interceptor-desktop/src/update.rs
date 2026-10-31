@@ -69,7 +69,7 @@ fn installed()->std::result::Result<PathBuf,String>{
     // The installer's ownership record (scripts/installer/interceptor.iss CommitState).
     let read=|name:&str|->Option<String>{
         let mut buffer=vec![0_u16;4096];let mut bytes=(buffer.len()*2)as u32;
-        if unsafe{RegGetValueW(HKEY_CURRENT_USER,&HSTRING::from(r"Software\Hacker Valley Media\Interceptor\Installer\State"),&HSTRING::from(name),RRF_RT_REG_SZ,None,Some(buffer.as_mut_ptr().cast()),Some(&mut bytes))}.is_err(){return None;}
+        if unsafe{RegGetValueW(HKEY_CURRENT_USER,&HSTRING::from(r"Software\elboaf\Interceptor\Installer\State"),&HSTRING::from(name),RRF_RT_REG_SZ,None,Some(buffer.as_mut_ptr().cast()),Some(&mut bytes))}.is_err(){return None;}
         let length=(bytes as usize/2).saturating_sub(1);Some(String::from_utf16_lossy(&buffer[..length.min(buffer.len())]))
     };
     let exe=std::env::current_exe().map_err(|e|format!("this provider's path is unavailable: {e}"))?;
