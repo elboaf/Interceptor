@@ -1,6 +1,6 @@
 # Install Interceptor on Windows
 
-Interceptor for Windows comes in two signed installers: Browser-only (`Interceptor-Browser-X.Y.Z-windows-<arch>.exe`) and Full (`Interceptor-Full-X.Y.Z-windows-<arch>.exe`), which adds the native desktop provider for `interceptor desktop` and automatic updates. This guide covers both; the steps below use the Browser-only name, and the Full installer runs the same way. Both support Windows 11 24H2 or newer on x64 and ARM64, install for the current user without elevation, and support one active interactive user per machine.
+Interceptor for Windows comes in two installers: Browser-only (`Interceptor-Browser-X.Y.Z-windows-<arch>.exe`) and Full (`Interceptor-Full-X.Y.Z-windows-<arch>.exe`), which adds the native desktop provider for `interceptor desktop` and automatic updates. This guide covers both; the steps below use the Browser-only name, and the Full installer runs the same way. Both support Windows 10 22H2 or newer on x64 and ARM64, install for the current user without elevation, and support one active interactive user per machine.
 
 ## Install
 
@@ -13,7 +13,7 @@ irm https://raw.githubusercontent.com/Hacker-Valley-Media/Interceptor/main/scrip
 To do it by hand:
 
 1. Download the architecture-matched `Interceptor-Browser-X.Y.Z-windows-x64.exe` or `Interceptor-Browser-X.Y.Z-windows-arm64.exe` from the matching GitHub release.
-2. Verify that Windows reports the publisher as **Hacker Valley Media**. Do not continue with an unsigned or differently signed production artifact.
+2. Fork build (elboaf): the installer is **not Authenticode-signed**. Verify integrity by its SHA-256 instead (compare against the checksums in the release, or run `scripts/get-interceptor.ps1` from this repo, which checks the release's `SHA256SUMS-ALL` for you). SmartScreen may show an unknown-publisher warning on first run; that is expected for an unsigned build.
 3. Run Setup. New installs use `%LOCALAPPDATA%\Programs\Interceptor`; upgrades and repairs preserve the existing same-product directory.
 4. Install the Interceptor extension, either way. Both copies share one extension ID and work the same:
    - **Chrome Web Store** (Chrome, Brave, Edge): https://chromewebstore.google.com/detail/interceptor/gomcpnagjjlhehnkoobkjgnkbleiooed. Edge installs it after you allow extensions from other stores; a Microsoft Edge Add-ons listing is not published yet.
@@ -47,7 +47,7 @@ Use `/SILENT` instead of `/VERYSILENT` for progress UI. Silent setup opens no br
 
 ## Repair, update, and downgrade
 
-Run the same signed version to repair, or a newer architecture-matched installer to update. Downgrades are refused. A Full install updates the way Sparkle updates a Mac: once a day its provider checks `https://updates.hackervalley.media/windows/latest.json`, and a newer release opens the **Interceptor Software Update** window with the release notes and **Skip This Version**, **Remind Me Later**, and **Install Update**. Nothing downloads until you click Install Update; the installer must match the signed feed and carry the Hacker Valley Media Authenticode signature, then **Install and Relaunch** runs it and Interceptor restarts. `interceptor update` checks now; `setx INTERCEPTOR_AUTO_UPDATE off`, then sign out and back in, stops the daily checks. The update folder is `%LOCALAPPDATA%\Interceptor\Updates`, and uninstall removes it. Windows ARM64 users should use the ARM64 package even if an older x64 build was previously installed under emulation.
+Run the same version to repair, or a newer architecture-matched installer to update. Downgrades are refused. A Full install updates the way Sparkle updates a Mac: once a day its provider checks an update feed (`https://updates.hackervalley.media/windows/latest.json` on upstream; a fork build points elsewhere via the `INTERCEPTOR_UPDATE_FEED` environment variable), and a newer release opens the **Interceptor Software Update** window with the release notes and **Skip This Version**, **Remind Me Later**, and **Install Update**. Nothing downloads until you click Install Update; the installer must match the Ed25519-signed feed, then **Install and Relaunch** runs it and Interceptor restarts. `interceptor update` checks now; `setx INTERCEPTOR_AUTO_UPDATE off`, then sign out and back in, stops the daily checks. The update folder is `%LOCALAPPDATA%\Interceptor\Updates`, and uninstall removes it. Windows ARM64 users should use the ARM64 package even if an older x64 build was previously installed under emulation.
 
 ## Uninstall
 
@@ -65,7 +65,7 @@ Uninstall removes only installer-owned PATH/native-host state and owned skill li
 - **Unknown command or stale behavior:** run `where.exe interceptor`. If another copy resolves before `%LOCALAPPDATA%\Programs\Interceptor` (for example a leftover development install), remove that earlier PATH entry; the installer never edits PATH entries it does not own.
 - **Interceptor gone after the browser restarts:** run `interceptor diagnose extension`. A profile that loaded the unpacked copy from an installer before 1.0.1 keeps an entry for the old extension ID on `%LOCALAPPDATA%\Programs\Interceptor\extension`, and the browser then loads nothing from that folder. The report lists each affected profile with the exact steps (load `%LOCALAPPDATA%\Programs\Interceptor\extension-legacy`, then reload or remove the old card). Setup and updates run the same check and show a dialog when they find one.
 - **Extension not connected:** confirm the extension is installed (from the Chrome Web Store, or **Load unpacked** from `%LOCALAPPDATA%\Programs\Interceptor\extension`) and enabled, then run `interceptor init --verbose`. `interceptor diagnose` names the connected copy (store or unpacked) and its version.
-- **Install/upgrade in progress:** wait for Setup to finish. If Setup was interrupted, rerun the same signed installer so its pending transaction can recover.
+- **Install/upgrade in progress:** wait for Setup to finish. If Setup was interrupted, rerun the same installer so its pending transaction can recover.
 - **Ports 19221/19222 already in use:** Interceptor v1 supports one active interactive Windows user. Stop the other Interceptor/development instance; Setup never terminates an unidentified process.
 - **Legacy administrator preview detected:** remove that copy from Installed apps with an administrator account, then rerun the per-user installer.
 - **Logs:** pass `/LOG=<absolute-path>` to Setup or uninstall. Logs intentionally omit daemon shutdown tokens, signing credentials, browser data, and unrelated registry/PATH contents.

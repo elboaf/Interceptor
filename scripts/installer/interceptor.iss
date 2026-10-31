@@ -49,7 +49,9 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 UsePreviousAppDir=yes
-MinVersion=10.0.26100
+; Fork (elboaf): floor lowered from upstream's 10.0.26100 (Win11 24H2) to
+; 10.0.19045 (Win10 22H2, the last Win10 build); the provider has no runtime gate.
+MinVersion=10.0.19045
 SetupArchitecture=x64
 ArchitecturesAllowed={#AllowedArchitectures}
 ArchitecturesInstallIn64BitMode={#InstallArchitectures}

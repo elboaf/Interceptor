@@ -1,4 +1,18 @@
-name: Windows Installer
+# Fork (elboaf) Windows release lane.
+#
+# Differences from upstream's windows-installer.yml:
+# - Builds the x64 Browser-only installer only (no arm64, no Full installer).
+# - No code signing: upstream's sign-and-test job needs Hacker Valley Media's
+#   Azure Artifact Signing account and pinned signing toolchain, which a fork
+#   does not have. Integrity ships as SHA256SUMS instead.
+# - Artifacts upload to a draft GitHub release on this fork. Upstream's
+#   attestation, WinGet, and signed-feed publication steps are dropped.
+#
+# The toolchain lock (scripts/installer/windows-toolchain.lock.json) pins the
+# runner image, Bun, and Inno Setup; this workflow verifies the runner image
+# against it before running any tool, same as upstream.
+
+name: Windows Installer (fork)
 
 on:
   push:
@@ -25,19 +39,26 @@ jobs:
         run: |
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
           if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) {
-            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion"
+            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock wants $($lock.runner.imageOS) $($lock.runner.imageVersion); bump the lock when the windows-2025 image rolls)"
           }
 
       - name: Resolve and verify release version
         id: version
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF_TYPE -ne 'tag' -or $env:GITHUB_REF_NAME -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
-            throw 'Windows production builds must run from an exact stable vX.Y.Z tag.'
-          }
-          $version = $env:GITHUB_REF_NAME.Substring(1)
+          # Tag pushes must match package.json; workflow_dispatch builds the
+          # package.json version directly so a release tag is not required.
           $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ($version -ne $packageVersion) { throw "Tag $version does not match package.json $packageVersion" }
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            if ($env:GITHUB_REF_NAME -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+              throw 'Windows production builds must run from an exact stable vX.Y.Z tag.'
+            }
+            $version = $env:GITHUB_REF_NAME.Substring(1)
+            if ($version -ne $packageVersion) { throw "Tag $version does not match package.json $packageVersion" }
+          } else {
+            $version = $packageVersion
+            if ($version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "package.json version $version must be stable X.Y.Z" }
+          }
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Setup pinned Bun
@@ -82,8 +103,6 @@ jobs:
         shell: bash
         run: |
           bash scripts/build.sh --target=windows-x64
-          bash scripts/build.sh --target=windows-arm64
-          cmp dist/windows/x64/daemon/com.interceptor.host.json dist/windows/arm64/daemon/com.interceptor.host.json
 
       - name: Verify versions and PE architectures
         shell: pwsh
@@ -98,8 +117,6 @@ jobs:
           $expected = @{
             'dist/windows/x64/interceptor.exe' = 0x8664
             'dist/windows/x64/daemon/interceptor-daemon.exe' = 0x8664
-            'dist/windows/arm64/interceptor.exe' = 0xaa64
-            'dist/windows/arm64/daemon/interceptor-daemon.exe' = 0xaa64
           }
           foreach ($entry in $expected.GetEnumerator()) {
             if ((Get-Machine $entry.Key) -ne $entry.Value) { throw "PE architecture mismatch: $($entry.Key)" }
@@ -113,13 +130,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  sign-and-test:
+  package-and-test:
     needs: build
     runs-on: windows-2025
-    environment: windows-signing
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -129,243 +144,126 @@ jobs:
         shell: pwsh
         run: |
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
-          if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) { throw 'Unapproved runner image' }
+          if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) {
+            throw "Unapproved runner image: $env:ImageOS $env:ImageVersion (lock wants $($lock.runner.imageOS) $($lock.runner.imageVersion); bump the lock when the windows-2025 image rolls)"
+          }
 
-      - name: Verify release version
+      - name: Resolve version
         id: version
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF_TYPE -ne 'tag' -or $env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') { throw 'A stable tag is required' }
-          $version = $env:GITHUB_REF_NAME.Substring(1)
-          if ($version -ne (Get-Content package.json -Raw | ConvertFrom-Json).version) { throw 'Version mismatch' }
-          "version=$version" >> $env:GITHUB_OUTPUT
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { "version=$($env:GITHUB_REF_NAME.Substring(1))" >> $env:GITHUB_OUTPUT }
+          else { "version=$((Get-Content package.json -Raw | ConvertFrom-Json).version)" >> $env:GITHUB_OUTPUT }
+
+      - name: Setup pinned Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: windows-unsigned-${{ steps.version.outputs.version }}
           path: dist/windows
 
-      - name: Azure OIDC login
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Acquire and verify pinned signing toolchain
+      # Acquire the pinned Inno Setup (hash-checked against the toolchain lock).
+      # No signing toolchain: this fork ships unsigned artifacts. Inno Setup 7's
+      # license needs acknowledgment before use, same gate upstream applies.
+      - name: Acquire pinned Inno Setup
         id: tools
         shell: pwsh
         run: |
-          if ('${{ vars.INNO_SETUP_LICENSE_ACKNOWLEDGED }}' -ne 'true') { throw 'Inno Setup commercial license acknowledgement is required' }
+          if ('${{ vars.INNO_SETUP_LICENSE_ACKNOWLEDGED }}' -ne 'true') { throw 'Set the repository variable INNO_SETUP_LICENSE_ACKNOWLEDGED=true (Settings > Secrets and variables > Actions > Variables) after confirming your Inno Setup 7 use is licensed.' }
           $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
           $toolRoot = Join-Path $env:RUNNER_TEMP 'interceptor-windows-tools'
           New-Item -ItemType Directory -Force -Path $toolRoot | Out-Null
-          function Fetch-And-Verify($item, $name) {
-            $path = Join-Path $toolRoot $name
-            Invoke-WebRequest -Uri $item.url -OutFile $path
-            if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item.sha256) { throw "Hash mismatch: $name" }
-            return $path
-          }
-          $sdkPackage = Fetch-And-Verify $lock.windowsSdkBuildTools 'windows-sdk.zip'
-          $signingPackage = Fetch-And-Verify $lock.artifactSigningClient 'artifact-signing.zip'
-          $innoInstaller = Fetch-And-Verify $lock.innoSetup 'inno-setup.exe'
+          $innoInstaller = Join-Path $toolRoot 'inno-setup.exe'
+          Invoke-WebRequest -Uri $lock.innoSetup.url -OutFile $innoInstaller
+          if ((Get-FileHash $innoInstaller -Algorithm SHA256).Hash.ToLowerInvariant() -ne $lock.innoSetup.sha256) { throw 'Hash mismatch: inno-setup.exe' }
           $signature = Get-AuthenticodeSignature $innoInstaller
           if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch [regex]::Escape($lock.innoSetup.publisher)) { throw 'Inno Setup publisher verification failed' }
-          Expand-Archive $sdkPackage (Join-Path $toolRoot 'sdk') -Force
-          Expand-Archive $signingPackage (Join-Path $toolRoot 'signing') -Force
           $innoRoot = Join-Path $toolRoot 'inno'
           $proc = Start-Process $innoInstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER',("/DIR=$innoRoot") -Wait -PassThru
           if ($proc.ExitCode -ne 0) { throw 'Pinned Inno Setup installation failed' }
-          $metadata = @{
-            Endpoint = '${{ vars.ARTIFACT_SIGNING_ENDPOINT }}'
-            CodeSigningAccountName = '${{ vars.ARTIFACT_SIGNING_ACCOUNT }}'
-            CertificateProfileName = '${{ vars.ARTIFACT_SIGNING_PROFILE }}'
-            CorrelationId = $env:GITHUB_RUN_ID
-          }
-          $metadataPath = Join-Path $toolRoot 'metadata.json'
-          $metadata | ConvertTo-Json | Set-Content -Path $metadataPath -Encoding utf8
-          "root=$toolRoot" >> $env:GITHUB_OUTPUT
-          "signtool=$toolRoot/sdk/bin/10.0.26100.0/x64/signtool.exe" >> $env:GITHUB_OUTPUT
-          "dlib=$toolRoot/signing/bin/x64/Azure.CodeSigning.Dlib.dll" >> $env:GITHUB_OUTPUT
-          "metadata=$metadataPath" >> $env:GITHUB_OUTPUT
           "iscc=$innoRoot/ISCC.exe" >> $env:GITHUB_OUTPUT
 
-      - name: Sign CLI and daemon payloads
-        shell: pwsh
-        run: |
-          $signTool = '${{ steps.tools.outputs.signtool }}'
-          $dlib = '${{ steps.tools.outputs.dlib }}'
-          $metadata = '${{ steps.tools.outputs.metadata }}'
-          $timestamp = (Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json).artifactSigningClient.timestampUrl
-          Get-ChildItem dist/windows -Filter *.exe -Recurse | ForEach-Object {
-            & $signTool sign /v /debug /fd SHA256 /tr $timestamp /td SHA256 /dlib $dlib /dmdf $metadata $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Signing failed: $($_.FullName)" }
-            & $signTool verify /pa /all /v /tw $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $($_.FullName)" }
-          }
-
-      - name: Compile signed x64 and ARM64 installers
+      # Unsigned build: no Inno sign tool is passed and no signing define is set;
+      # Inno writes the uninstaller directly.
+      - name: Compile x64 installer
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
-          $signTool = '${{ steps.tools.outputs.signtool }}'
-          $dlib = '${{ steps.tools.outputs.dlib }}'
-          $metadata = '${{ steps.tools.outputs.metadata }}'
-          $timestamp = (Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json).artifactSigningClient.timestampUrl
-          # Literal double-quotes are mangled on the way into ISCC; use Inno's
-          # $q quote token, and backslash paths so CreateProcess resolves them.
-          $signTool = $signTool -replace '/','\'
-          $dlib = $dlib -replace '/','\'
-          $metadata = $metadata -replace '/','\'
-          $signCommand = "`$q$signTool`$q sign /v /fd SHA256 /tr $timestamp /td SHA256 /dlib `$q$dlib`$q /dmdf `$q$metadata`$q `$f"
-          foreach ($arch in @('x64','arm64')) {
-            & '${{ steps.tools.outputs.iscc }}' "/SInterceptorSign=$signCommand" "/DSigningEnabled=1" "/DAppVersion=$version" "/DArtifactArch=$arch" scripts/installer/interceptor.iss
-            if ($LASTEXITCODE -ne 0) { throw "Inno compile failed: $arch" }
-          }
+          & '${{ steps.tools.outputs.iscc }}' "/DAppVersion=$version" "/DArtifactArch=x64" scripts/installer/interceptor.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno compile failed: x64" }
 
-      - name: Verify outer signatures and hashes
+      - name: Write SHA256SUMS
         shell: pwsh
         run: |
-          $signTool = '${{ steps.tools.outputs.signtool }}'
-          Get-ChildItem dist/release/windows -Filter *.exe | ForEach-Object {
-            & $signTool verify /pa /all /v /tw $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Installer signature verification failed: $($_.Name)" }
-          }
           Get-ChildItem dist/release/windows -Filter *.exe | Sort-Object Name | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
           } | Set-Content dist/release/windows/SHA256SUMS -Encoding ascii
 
       - name: Install, verify, repair, and uninstall x64 package
         shell: pwsh
-        run: scripts/installer/test-windows-installer.ps1 -Installer "dist/release/windows/Interceptor-Browser-${{ steps.version.outputs.version }}-windows-x64.exe" -Architecture x64 -Version "${{ steps.version.outputs.version }}" -SignTool "${{ steps.tools.outputs.signtool }}" -DisposableMachine
+        run: scripts/installer/test-windows-installer.ps1 -Installer "dist/release/windows/Interceptor-Browser-${{ steps.version.outputs.version }}-windows-x64.exe" -Architecture x64 -Version "${{ steps.version.outputs.version }}" -DisposableMachine
 
-      - name: Upload signed release candidates
+      - name: Upload release candidates
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: windows-signed-${{ steps.version.outputs.version }}
+          name: windows-release-${{ steps.version.outputs.version }}
           path: dist/release/windows
           if-no-files-found: error
           retention-days: 7
 
-  attest:
-    needs: sign-and-test
-    runs-on: windows-2025
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Verify runner image before executing tools
-        shell: pwsh
-        run: |
-          $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
-          if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) { throw 'Unapproved runner image' }
-      - name: Resolve version
-        id: version
-        shell: pwsh
-        run: |
-          if ($env:GITHUB_REF_TYPE -ne 'tag') { throw 'A tag is required' }
-          "version=$($env:GITHUB_REF_NAME.Substring(1))" >> $env:GITHUB_OUTPUT
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: windows-signed-${{ steps.version.outputs.version }}
-          path: dist/release/windows
-      - uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
-        with:
-          subject-path: dist/release/windows/*.exe
-
   draft-release:
-    needs: attest
-    runs-on: windows-2025
-    environment: windows-release
+    needs: package-and-test
+    # Tags publish a draft release; workflow_dispatch builds are only CI
+    # (fetch the installer from the windows-release-* artifact).
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Verify runner image before executing tools
-        shell: pwsh
-        run: |
-          $lock = Get-Content scripts/installer/windows-toolchain.lock.json -Raw | ConvertFrom-Json
-          if ($env:ImageOS -ne $lock.runner.imageOS -or $env:ImageVersion -ne $lock.runner.imageVersion) { throw 'Unapproved runner image' }
       - name: Resolve version
         id: version
-        shell: pwsh
         run: |
-          if ($env:GITHUB_REF_TYPE -ne 'tag') { throw 'A tag is required' }
-          "version=$($env:GITHUB_REF_NAME.Substring(1))" >> $env:GITHUB_OUTPUT
-      - name: Setup pinned Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version-file: .bun-version
+          if [ "$GITHUB_REF_TYPE" != 'tag' ]; then echo 'A tag is required' >&2; exit 1; fi
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: windows-signed-${{ steps.version.outputs.version }}
+          name: windows-release-${{ steps.version.outputs.version }}
           path: dist/release/windows
-      - name: Generate and validate WinGet manifests
-        shell: pwsh
-        run: |
-          $version = '${{ steps.version.outputs.version }}'
-          $x64 = Get-FileHash "dist/release/windows/Interceptor-Browser-$version-windows-x64.exe" -Algorithm SHA256
-          $arm64 = Get-FileHash "dist/release/windows/Interceptor-Browser-$version-windows-arm64.exe" -Algorithm SHA256
-          bun scripts/release/generate-winget.ts --version $version --base-url "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$version" --x64-sha256 $x64.Hash --arm64-sha256 $arm64.Hash --output dist/release/winget
-          winget validate --manifest "dist/release/winget/HackerValleyMedia.Interceptor/$version"
-          # 0x8A150028 = APPINSTALLER_CLI_ERROR_MANIFEST_VALIDATION_WARNING
-          # (AppInstallerErrors.h): the manifests are valid; the runner's
-          # winget build still warns on the schema header line. Accept the
-          # signed and unsigned spellings of exactly that code; real
-          # validation failures still throw.
-          $code = $LASTEXITCODE
-          Write-Host "winget validate exit code: $code"
-          if ($code -ne 0 -and $code -ne -1978335192 -and $code -ne 2316632104) { throw "WinGet validation failed (exit $code)" }
-          # The Actions pwsh epilogue re-exits with $LASTEXITCODE, which is
-          # still winget's warning code after the guard passes.
-          exit 0
+
       - name: Create or verify immutable draft and upload once
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = $env:GITHUB_REF_NAME
-          $existing = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft,assets 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --draft --verify-tag --title $tag
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create draft release' }
-            $existing = '{"isDraft":true,"assets":[]}'
-          }
-          $release = $existing | ConvertFrom-Json
-          if (-not $release.isDraft) { throw 'Refusing to mutate a published release' }
-          $files = Get-ChildItem dist/release/windows -File
-          $existingNames = @($release.assets | ForEach-Object name)
-          foreach ($file in $files) { if ($existingNames -contains $file.Name) { throw "Release asset already exists: $($file.Name)" } }
-          gh release upload $tag ($files.FullName) --repo $env:GITHUB_REPOSITORY
-          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
-      - name: Redownload and reverify immutable draft assets
-        shell: pwsh
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,assets > existing.json 2>/dev/null; then
+            jq -e '.isDraft == true' existing.json > /dev/null || { echo 'Refusing to mutate a published release' >&2; exit 1; }
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$tag"
+            echo '{"assets":[]}' > existing.json
+          fi
+          existingNames="$(jq -r '.assets[].name' existing.json)"
+          for file in dist/release/windows/*; do
+            name="$(basename "$file")"
+            if grep -qx "$name" <<< "$existingNames"; then echo "Release asset already exists: $name" >&2; exit 1; fi
+          done
+          gh release upload "$tag" dist/release/windows/* --repo "$GITHUB_REPOSITORY"
+
+      - name: Redownload and reverify draft assets
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $verify = Join-Path $env:RUNNER_TEMP 'redownload'
-          New-Item -ItemType Directory -Force -Path $verify | Out-Null
-          gh release download $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --dir $verify --pattern 'Interceptor-Browser-*-windows-*.exe' --pattern SHA256SUMS
-          if ($LASTEXITCODE -ne 0) { throw 'Draft asset redownload failed' }
-          Push-Location $verify
-          foreach ($line in Get-Content SHA256SUMS) {
-            $hash, $name = $line -split '\s+', 2
-            if ((Get-FileHash $name -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash) { throw "Redownload hash mismatch: $name" }
-            if ((Get-AuthenticodeSignature $name).Status -ne 'Valid') { throw "Redownload signature invalid: $name" }
-            gh attestation verify $name --repo $env:GITHUB_REPOSITORY
-            if ($LASTEXITCODE -ne 0) { throw "Attestation verification failed: $name" }
-          }
-          Pop-Location
-      - name: Upload WinGet candidates
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: winget-${{ steps.version.outputs.version }}
-          path: dist/release/winget
-          if-no-files-found: error
+          set -euo pipefail
+          verify="$RUNNER_TEMP/redownload"
+          mkdir -p "$verify"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$verify" --pattern 'Interceptor-Browser-*-windows-*.exe' --pattern 'SHA256SUMS'
+          cd "$verify"
+          while read -r hash name; do
+            echo "$hash  $name" | sha256sum -c - || { echo "Redownload hash mismatch: $name" >&2; exit 1; }
+          done < SHA256SUMS

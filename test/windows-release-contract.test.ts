@@ -68,7 +68,7 @@ describe("Windows production release contract", () => {
       "AppId={{{#ProductGuid}}",
       "DefaultDirName={userpf}\\Interceptor",
       "PrivilegesRequired=lowest",
-      "MinVersion=10.0.26100",
+      "MinVersion=10.0.19045",
       "SetupArchitecture=x64",
       "CloseApplications=no",
       "RestartApplications=no",
@@ -178,20 +178,35 @@ describe("Windows production release contract", () => {
     const lock = JSON.parse(read("scripts/installer/windows-toolchain.lock.json"))
     expect(workflow).toContain("runs-on: windows-2025")
     expect(workflow).toContain("persist-credentials: false")
-    expect(workflow).toContain("environment: windows-signing")
-    expect(workflow).toContain("environment: windows-release")
-    expect(workflow).toContain("attestations: write")
-    expect(workflow).toContain("artifact-metadata: write")
+    // Fork (elboaf): the Azure signing environments, attestations, and WinGet
+    // publication are gone; the Inno Setup license acknowledgment and the
+    // Authenticode verification of the Inno installer itself stay.
     expect(workflow).toContain("INNO_SETUP_LICENSE_ACKNOWLEDGED")
-    // The Chrome Web Store identity is approved (store-identities.json), so the
-    // release lane runs the production gate; the development override is gone.
-    expect(workflow).not.toContain("INTERCEPTOR_WINDOWS_IDENTITY_MODE")
-    expect(workflow).toContain("gh attestation verify")
     expect(workflow).toContain("Get-AuthenticodeSignature")
-    for (const sha of Object.values(lock.actions) as string[]) expect(workflow).toContain(sha)
+    expect(workflow).toContain("gh release upload")
+    expect(workflow).toContain("gh release download")
+    const usedActions = ["actions/checkout", "oven-sh/setup-bun", "actions/upload-artifact", "actions/download-artifact"]
+    for (const name of usedActions) expect(workflow).toContain(lock.actions[name])
     for (const forbidden of ["windows-latest", "bun-version: latest", "version_override", "--clobber", "WINDOWS_PFX"]) {
       expect(workflow).not.toContain(forbidden)
     }
+  })
+
+  test("fork lane: Windows 10 floor, x64 only, unsigned", () => {
+    const iss = read("scripts/installer/interceptor.iss")
+    // The last Windows 10 build (22H2), not upstream's Windows 11 24H2 floor.
+    expect(iss).toContain("MinVersion=10.0.19045")
+    expect(iss).not.toContain("MinVersion=10.0.26100")
+    const identity = read("scripts/installer/build-windows-notification-identity.ps1")
+    expect(identity).toContain('MinVersion="10.0.19045.0"')
+    const winget = read("scripts/release/generate-winget.ts")
+    expect(winget).toContain("MinimumOSVersion: 10.0.19045.0")
+    const workflow = read(".github/workflows/windows-installer.yml")
+    expect(workflow).toContain("windows-x64")
+    expect(workflow).not.toContain("windows-arm64")
+    // Unsigned: the fork lane compiles without Inno's sign-tool define.
+    expect(workflow).not.toContain("SigningEnabled")
+    expect(workflow).not.toContain("/SInterceptorSign")
   })
 
   test("generates WinGet 1.12 manifests for both immutable installers", () => {
@@ -207,7 +222,7 @@ describe("Windows production release contract", () => {
     expect(installer).toContain("ManifestVersion: 1.12.0")
     expect(installer).toContain("InstallerType: inno")
     expect(installer).toContain("Scope: user")
-    expect(installer).toContain("MinimumOSVersion: 10.0.26100.0")
+    expect(installer).toContain("MinimumOSVersion: 10.0.19045.0")
     expect(installer).toContain("Architecture: x64")
     expect(installer).toContain("Architecture: arm64")
     expect(installer).toContain("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART")

@@ -1,4 +1,7 @@
-# Install Interceptor from the latest GitHub release, end to end (Windows 11 24H2+).
+# Install Interceptor from the latest GitHub release, end to end.
+# Fork (elboaf): targets elboaf/Interceptor releases, which are unsigned, so only
+# the SHA-256 from the release's SHA256SUMS-ALL is verified (the upstream script
+# also demanded an Authenticode signature from Hacker Valley Media).
 #
 #   irm https://raw.githubusercontent.com/Hacker-Valley-Media/Interceptor/main/scripts/get-interceptor.ps1 | iex
 #   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Hacker-Valley-Media/Interceptor/main/scripts/get-interceptor.ps1))) -Full -Mcp all
@@ -21,8 +24,9 @@ function Install-Interceptor {
   # Preferences set here stay in this function; iex would otherwise change the caller's session.
   $ErrorActionPreference = "Stop"
   $ProgressPreference = "SilentlyContinue"  # the progress bar slows Invoke-WebRequest badly on 5.1
-  $repo = "Hacker-Valley-Media/Interceptor"
-  $signer = "CN=Hacker Valley Media LLC,*"
+  $repo = "elboaf/Interceptor"
+  # Fork: releases are not Authenticode-signed; the SHA-256 check above is the integrity gate.
+  $signer = ""
   $storeUrl = "https://chromewebstore.google.com/detail/interceptor/gomcpnagjjlhehnkoobkjgnkbleiooed"
   $installDir = Join-Path $env:LOCALAPPDATA "Programs\Interceptor"
   $cli = Join-Path $installDir "interceptor.exe"
@@ -83,11 +87,16 @@ function Install-Interceptor {
     if (-not $line) { throw "$asset is not listed in SHA256SUMS-ALL; nothing was installed." }
     $want = ($line -split '\s+')[0].ToLower()
     if ((Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower() -ne $want) { throw "Checksum mismatch for $asset; nothing was installed." }
-    $sig = Get-AuthenticodeSignature $exe
-    if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notlike $signer) {
-      throw "$asset is not validly signed by Hacker Valley Media (status $($sig.Status)); nothing was installed."
+    if ($signer) {
+      # Upstream behavior: require a valid Authenticode signature from the known publisher.
+      $sig = Get-AuthenticodeSignature $exe
+      if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notlike $signer) {
+        throw "$asset is not validly signed by Hacker Valley Media (status $($sig.Status)); nothing was installed."
+      }
+      Write-Host "==> Checked: SHA-256 matches, signed by Hacker Valley Media"
+    } else {
+      Write-Host "==> Checked: SHA-256 matches (fork build is not Authenticode-signed)"
     }
-    Write-Host "==> Checked: SHA-256 matches, signed by Hacker Valley Media"
 
     Write-Host "==> Installing $asset"
     $log = Join-Path $tmp "setup.log"

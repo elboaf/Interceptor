@@ -6,7 +6,7 @@
 .DESCRIPTION
   DEVELOPER HELPER — not the product installer. This script only registers the
   native-messaging host for a built source checkout and prints the manual
-  "Load unpacked" steps. The shipping Windows product is the signed per-user
+  "Load unpacked" steps. The shipping Windows product is the per-user
   installer built from scripts/installer/interceptor.iss; see
   docs/windows-install.md.
 

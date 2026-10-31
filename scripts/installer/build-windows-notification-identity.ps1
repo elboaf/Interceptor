@@ -51,7 +51,7 @@ $manifest=@"
  <Identity Name="$name" Publisher="$publisher" Version="$Version.0" ProcessorArchitecture="neutral"/>
  <Properties><DisplayName>Interceptor</DisplayName><PublisherDisplayName>Hacker Valley Media LLC</PublisherDisplayName><Logo>Assets\logo.png</Logo><uap10:AllowExternalContent>true</uap10:AllowExternalContent></Properties>
  <Resources><Resource Language="en-us"/></Resources>
- <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.26100.0" MaxVersionTested="10.0.26100.0"/></Dependencies>
+ <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19045.0" MaxVersionTested="10.0.26100.0"/></Dependencies>
  <Applications><Application Id="Desktop" Executable="interceptor-notification-badge.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
   <uap:VisualElements AppListEntry="none" DisplayName="Interceptor" Description="Interceptor native desktop provider" BackgroundColor="transparent" Square150x150Logo="Assets\logo.png" Square44x44Logo="Assets\logo.png"/>
  </Application><Application Id="Contacts" Executable="interceptor-contacts-native.exe" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
