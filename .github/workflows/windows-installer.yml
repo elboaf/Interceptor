@@ -269,15 +269,17 @@ jobs:
         shell: pwsh
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP 'fork-signing.pfx'
-          & scripts/installer/new-fork-certificate.ps1 -PfxPath $pfx -PasswordText (New-Guid).Guid
-          if ($LASTEXITCODE -ne 0) { throw 'Certificate creation failed' }
+          $pw = (New-Guid).Guid
+          & scripts/installer/new-fork-certificate.ps1 -PfxPath $pfx -PasswordText $pw
+          # A .ps1 of pure cmdlets never sets $LASTEXITCODE; a failure inside it
+          # throws and fails this step on its own (ErrorActionPreference=Stop).
           $signtool = '${{ steps.tools.outputs.sdkbin }}/signtool.exe'
           $timestamp = 'http://timestamp.digicert.com'
           $targets = @('dist/windows/x64/interceptor.exe', 'dist/windows/x64/daemon/interceptor-daemon.exe',
             'dist/windows/x64/desktop/interceptor-desktop.exe', 'dist/windows/x64/desktop/interceptor-notification-badge.exe',
             'dist/windows/x64/desktop/interceptor-contacts-native.exe', 'dist/windows/x64/desktop/notifications/notification-identity.msix')
           foreach ($file in $targets) {
-            & $signtool sign /v /fd SHA256 /f $pfx /tr $timestamp /td SHA256 $file
+            & $signtool sign /v /fd SHA256 /f $pfx /p $pw /tr $timestamp /td SHA256 $file
             if ($LASTEXITCODE -ne 0) { throw "Signing failed: $file" }
           }
           Copy-Item (Join-Path $env:RUNNER_TEMP 'fork-codesigning.cer') 'dist/windows/x64/desktop/notifications/fork-codesigning.cer'

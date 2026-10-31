@@ -186,7 +186,10 @@ if ($Full) {
   $msix = Join-Path $installRoot 'notification-identity.msix'
   foreach ($path in @($desktop, $badge, $contacts, $msix)) { Assert-True (Test-Path -LiteralPath $path) "Full payload missing after install: $path" }
   $sig = Get-AuthenticodeSignature -LiteralPath $desktop
-  Assert-True ($sig.Status -eq 'Valid') "Provider payload is not self-signature-valid: $($sig.Status)"
+  # Self-signed payloads verify hash-intact but chain-untrusted on a fresh
+  # machine ('NotTrusted'); 'Valid' once the .cer is imported, 'HashMismatch'
+  # only if the payload was tampered with.
+  Assert-True ($sig.Status -in @('Valid', 'NotTrusted')) "Provider payload signature is not intact: $($sig.Status)"
   $imported = Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\TrustedPeople
   Assert-True ($null -ne $imported) 'Could not import the fork code-signing certificate.'
   $identity = & powershell -NoProfile -NonInteractive -Command "Add-AppxPackage -Path '$msix' -ExternalLocation '$installRoot'; if (-not \$?) { exit 1 }"
